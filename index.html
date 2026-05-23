@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ChordPro Studio & Vertical Tape Index</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- HTML2PDF Engine -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --ink: #1c1917; --ink-muted: #78716c; --ink-faint: #a8a29e;
+  --paper: #faf8f4; --paper-warm: #f5f0e8; --paper-dark: #ede8de;
+  --rule: #d6cfc4; --rule-heavy: #b5aca0;
+  --green: #1a5c45; --amber: #92400e; --amber-light: #fef3c7; --accent: #c84b32;
+}
+body { font-family: 'IBM Plex Mono', monospace; background: var(--paper-warm); color: var(--ink); min-height: 100vh; display: flex; flex-direction: column; }
+header { padding: 0 28px; height: 52px; background: var(--ink); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; flex-shrink: 0; }
+.logo { display: flex; align-items: baseline; gap: 10px; }
+.logo-mark { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 600; color: #faf8f4; }
+.logo-sub { font-size: 9px; color: #6b6460; letter-spacing: 0.14em; text-transform: uppercase; }
+.header-hint { font-size: 10px; color: #6b6460; letter-spacing: 0.05em; }
+
+/* Main Workspace Grid Split */
+.app-container { display: grid; grid-template-columns: 360px 1fr 1fr; flex: 1; min-height: calc(100vh - 52px); }
+
+/* Pane Viewports */
+.pane { display: flex; flex-direction: column; border-right: 1px solid var(--rule); background: #ffffff; }
+.pane-right { border-right: none; background: var(--paper); }
+.pane-bar { height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--rule); background: var(--paper-warm); gap: 8px; flex-shrink: 0; }
+.pane-label { font-size: 9px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); flex: 1; }
+.pane-body { flex: 1; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
+
+/* Vertical Tape Rack Workspace Styling */
+.library-pane { background: #0f0f12; border-right: 1px solid #27272a; }
+.shelf-container { padding: 20px 16px; display: flex; flex-direction: column; gap: 20px; }
+.shelf-search-box { width: 100%; padding: 8px 12px; background: #18181c; border: 1px solid #27272a; color: #fff; border-radius: 4px; font-family: inherit; font-size: 11px; outline: none; }
+.shelf-search-box::placeholder { color: #52525b; }
+
+/* Vertical VHS Rack Box Frame */
+.shelf { background: #141416; border-bottom: 12px solid #09090b; box-shadow: inset 0 4px 10px rgba(0,0,0,0.9); padding: 24px 12px 0 12px; display: flex; flex-direction: row; align-items: flex-end; justify-content: flex-start; gap: 6px; min-height: 245px; border-radius: 4px; border: 1px solid #27272a; overflow-x: auto; }
+.shelf-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: #71717a; font-weight: 700; }
+
+/* Standing Vertical VHS Spine */
+.vhs-spine-vertical { width: 30px; height: 195px; border-radius: 2px 2px 0 0; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer; box-shadow: inset -2px 0 3px rgba(0,0,0,0.4), inset 2px 0 3px rgba(255,255,255,0.1), 3px 0 6px rgba(0,0,0,0.5); transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s; flex-shrink: 0; margin-bottom: -1px; border-top: 5px solid #27272a; }
+.vhs-spine-vertical:hover { transform: translateY(-14px); box-shadow: 0 12px 18px rgba(0,0,0,0.8); z-index: 10; }
+
+/* White Space Label Container with Strict Overflow Masking */
+.vertical-sticker { width: 16px; height: 155px; background: #ffffff; color: #09090b; border-radius: 1px; display: flex; align-items: flex-start; justify-content: center; box-shadow: inset 1px 1px 2px rgba(0,0,0,0.2); border-bottom: 5px solid #ef4444; overflow: hidden; position: relative; padding-top: 10px; padding-bottom: 10px; }
+
+/* Vertical Marquee Scrolling Text Engine */
+.vertical-sticker-text { font-family: 'IBM Plex Mono', monospace; font-size: 9px; font-weight: 700; transform: rotate(-90deg); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.02em; color: #09090b; display: inline-block; position: absolute; top: 85px; transform-origin: center center; }
+
+/* Hover Animation: Smoothly scroll the entire text up and down if the title is long */
+.vhs-spine-vertical:hover .vertical-sticker-text { animation: verticalMarquee 6s linear infinite alternate; }
+
+@keyframes verticalMarquee {
+  0% { top: 110px; }
+  100% { top: -20px; }
+}
+
+/* Text Area Workspace Overrides */
+#input, #output-edit { flex: 1; width: 100%; border: none; outline: none; resize: none; padding: 18px 20px; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; line-height: 1.9; color: var(--ink); min-height: 400px; }
+#input { background: #ffffff; } #input::placeholder { color: #ccc8c2; font-size: 12px; }
+#output-edit { background: #fffef9; display: block; }
+
+/* Global Button Archetypes */
+.btn { font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.04em; padding: 5px 12px; border-radius: 4px; border: 1px solid var(--rule-heavy); background: var(--paper-warm); color: var(--ink); cursor: pointer; transition: all 0.1s; white-space: nowrap; line-height: 1; display: inline-flex; align-items: center; gap: 4px; }
+.btn:hover { background: var(--paper-dark); } .btn:active { transform: scale(0.96); }
+.btn-primary { background: var(--green); color: white; border-color: transparent; }
+.btn-primary:hover { background: #134533; }
+
+.transpose-row { display: flex; align-items: center; gap: 3px; }
+.trans-btn { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--rule-heavy); background: var(--paper-warm); color: var(--ink); pointer: cursor; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+.trans-label { font-size: 10px; font-weight: 600; color: var(--ink-muted); min-width: 24px; text-align: center; }
+.sep { width: 1px; height: 16px; background: var(--rule); flex-shrink: 0; }
+.auto-badge { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--green); opacity: 0.5; }
+.auto-badge.flash { opacity: 1; font-weight: bold; }
+
+/* Setlist Base Panel Layouts */
+.setlist-builder { padding: 14px; background: #141416; border-top: 1px solid #27272a; display: flex; flex-direction: column; gap: 10px; }
+.setlist-row { display: flex; gap: 8px; }
+.setlist-input { flex: 1; padding: 6px 10px; border: 1px solid #3f3f46; background: #1f1f24; color: #fff; font-family: inherit; font-size: 11px; border-radius: 4px; outline: none; }
+.setlist-input::placeholder { color: #71717a; }
+.setlist-queue { display: flex; flex-direction: column; gap: 4px; max-height: 120px; overflow-y: auto; margin-top: 4px; }
+.queue-item { display: flex; justify-content: space-between; align-items: center; background: #1f1f24; color: #e4e4e7; padding: 4px 8px; border-radius: 3px; border: 1px solid #3f3f46; font-size: 11px; }
+.queue-remove { color: #f43f5e; cursor: pointer; font-weight: bold; margin-left: 8px; }
+
+@media (max-width: 1024px) { .app-container { grid-template-columns: 1fr; } .pane { border-right: none; border-bottom: 1px solid var(--rule); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="logo-mark">ChordPro</span>
+    <span class="logo-sub">Studio & Tape Index</span>
+  </div>
+  <span class="header-hint">Searchable Scrolling Vertical Cassette Framework</span>
+</header>
+
+<div class="app-container">
+  
+  <!-- COLUMN 1: SEARCH BAR & STANDING TAPE LIBRARY -->
+  <div class="pane library-pane">
+    <div class="pane-bar" style="background: #09090b; border-bottom: 1px solid #27272a;">
+      <span class="pane-label" style="color: #a1a1aa;">Cassette Base Index</span>
+    </div>
+    <div class="pane-body">
+      <div class="shelf-container">
+        <!-- Live Instant Filtering Input Engine -->
+        <input type="text" id="rack-search" class="shelf-search-box" placeholder="Search saved song shelf..." oninput="renderShelfUI()" />
+        
+        <div>
+          <div class="shelf-title">Standing Tape Shelf</div>
+          <div class="shelf" id="shelf-1"><!-- Dynamic Tapes Inject Here --></div>
+        </div>
+      </div>
+      
+      <!-- Setlist Drawer Manager -->
+      <div class="setlist-builder">
+        <span class="pane-label" style="color: #a1a1aa; margin-bottom: 2px;">Classic Setlist Export Pipeline</span>
+        <div class="setlist-row">
+          <input type="text" id="setlist-title" class="setlist-input" placeholder="Setlist Name" value="Standing Mix Set" />
+          <input type="date" id="setlist-date" class="setlist-input" />
+        </div>
+        <button class="btn btn-primary" style="justify-content: center; font-weight: 700;" onclick="generateSetlistPDF()">Export Setlist PDF</button>
+        <div class="setlist-queue" id="setlist-queue"><!-- Queue stack --></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COLUMN 2: INPUT RUNTIME CONVERTER AREA -->
+  <div class="pane">
+    <div class="pane-bar">
+      <span class="pane-label">Classic Horizontal Text Input</span>
+      <span class="auto-badge" id="auto-badge">auto ✓</span>
+    </div>
+    <div class="pane-body">
+      <textarea id="input" spellcheck="false" placeholder="Paste standard text chord layouts here..."></textarea>
+    </div>
+  </div>
+
+  <!-- COLUMN 3: LIVE RE-WRITABLE BUFFER WITH QUICK COPY -->
+  <div class="pane pane-right">
+    <div class="pane-bar">
+      <span class="pane-label">ChordPro Markup Buffer View</span>
+      <div class="transpose-row">
+        <button class="trans-btn" onclick="transpose(-1)">−</button>
+        <span class="trans-label" id="trans-display">0</span>
+        <button class="trans-btn" onclick="transpose(+1)">+</button>
+      </div>
+      <div class="sep"></div>
+      <button class="btn btn-primary" onclick="copyMarkupBuffer()">Copy Buffer</button>
+      <button class="btn btn-primary" onclick="saveCurrentToShelf()">Save to Rack</button>
+    </div>
+    <div class="pane-body">
+      <textarea id="output-edit" spellcheck="false" placeholder="ChordPro markup elements generate natively here..."></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+const CHROMATIC = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const ENHARMONIC = {'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#'};
+let semitones = 0, autoTimer = null;
+let databaseSongs = JSON.parse(localStorage.getItem('vertical_vhs_db_v4')) || [];
+let currentSetlistQueue = [];
+
+const CASSETTE_COLOR_PALETTE = [
+  '#7c2d12', '#1e3a8a', '#14532d', '#701a75', '#312e81', 
+  '#854d0e', '#065f46', '#991b1b', '#1e293b', '#374151'
+];
+
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById('setlist-date').valueAsDate = new Date();
+  renderShelfUI();
+});
+
+function normalizeChord(c) { return ENHARMONIC[c] || c; }
+
+function transposeChord(chord, steps) {
+  const m = chord.match(/^([A-G][b#]?)(.*)/);
+  if (!m) return chord;
+  const root = normalizeChord(m[1]), suffix = m[2];
+  const idx = CHROMATIC.indexOf(root);
+  if (idx === -1) return chord;
+  return CHROMATIC[((idx + steps) % 12 + 12) % 12] + suffix;
+}
+
+const CHORD_RE = /^[A-G][b#]?(m|maj|min|sus|dim|aug|add|7|9|11|13|6|2|4|5|maj7|m7|dim7|aug7|sus2|sus4|m9|maj9)?[0-9]*(\/[A-G][b#]?)?(\*)?$/;
+function isChord(tok) { return CHORD_RE.test(tok); }
+function isChordOnlyLine(line) { const t = line.trim(); if (!t) return false; return t.split(/\s+/).every(isChord); }
+function isSectionLine(line) { return /^\[(Verse|Chorus|Bridge|Intro|Outro|Pre-Chorus|Tag|Instrumental|Interlude)[^\]]*\]$/i.test(line.trim()); }
+function isInlineChordLine(line) { return /\[[A-G][b#]?[^\]]*\]/.test(line); }
+function isRhythmLine(line) {
+  const t = line.trim();
+  return /^[\s|\/]+$/.test(t) || /^\|?\s*([A-G][b#]?[^\s|]*\s+)?(\/\s*)+(\|\s*([A-G][b#]?[^\s|]*\s+)?(\/\s*)*)*\|?\s*$/.test(t);
+}
+
+function mergeChordLyric(chordLine, lyricLine) {
+  const chords = [];
+  const re = /\S+/g; let m;
+  while ((m = re.exec(chordLine)) !== null) chords.push({ chord: m[0], col: m.index });
+  if (!chords.length) return lyricLine.trimEnd();
+  const lyric = lyricLine || '';
+  const maxCol = chords[chords.length - 1].col;
+  const padded = lyric.length < maxCol ? lyric + ' '.repeat(maxCol - lyric.length) : lyric;
+  let result = '', pos = 0;
+  for (let ci = 0; ci < chords.length; ci++) {
+    const { chord, col } = chords[ci];
+    if (col > pos) result += padded.slice(pos, col);
+    pos = col;
+    result += '[' + chord + ']';
+  }
+  result += padded.slice(pos);
+  return result.trimEnd();
+}
+
+function stripRhythmSlashes(line) {
+  const tokens = line.replace(/\|/g,' ').replace(/\//g,' ').replace(/\s+/g,' ').trim().split(' ').filter(t => isChord(t));
+  return tokens.filter((t,i) => t !== tokens[i-1]);
+}
+
+function doConvert(text) {
+  const lines = text.split('\n');
+  const processedLines = [];
+  let i = 0;
+
+  function peek(j) { return lines[j] !== undefined ? lines[j] : ''; }
+  function isLyricLine(l) {
+    const t = l.trim();
+    return t !== '' && !isChordOnlyLine(t) && !isSectionLine(t) && !isRhythmLine(t) && !isInlineChordLine(t);
+  }
+
+  while (i < lines.length) {
+    const line = lines[i], trimmed = line.trim();
+
+    if (trimmed === '') { i++; continue; }
+    if (isSectionLine(trimmed)) {
+      processedLines.push({ text: trimmed, type: 'section' });
+      i++;
+      continue;
+    }
+    if (isRhythmLine(trimmed)) {
+      const ch = stripRhythmSlashes(trimmed);
+      if (ch.length) processedLines.push({ text: ch.map(c => '['+c+']').join(' '), type: 'line' });
+      i++; continue;
+    }
+    if (isInlineChordLine(trimmed)) {
+      processedLines.push({ text: line, type: 'line' });
+      i++;
+      continue;
+    }
+    if (isChordOnlyLine(trimmed)) {
+      const nextL = peek(i + 1);
+      if (isLyricLine(nextL)) {
+        processedLines.push({ text: mergeChordLyric(line, nextL), type: 'line' });
+        i += 2;
+      } else {
+        processedLines.push({ text: trimmed.split(/\s+/).map(c => '['+c+']').join(' '), type: 'line' });
+        i++;
+      }
+      continue;
+    }
+
+    processedLines.push({ text: line, type: 'line' });
+    i++;
+  }
+
+  const out = [];
+  let currentLineCount = 0;
+
+  for (let j = 0; j < processedLines.length; j++) {
+    const item = processedLines[j];
+    if (item.type === 'section') {
+      if (out.length > 0) out.push('');
+      out.push(item.text);
+      currentLineCount = 0;
+    } else {
+      out.push(item.text);
+      currentLineCount++;
+      if (currentLineCount === 2) {
+        if (j + 1 < processedLines.length && processedLines[j + 1].type !== 'section') {
+          out.push('');
+        }
+        currentLineCount = 0;
+      }
+    }
+  }
+  return out.join('\n').trimEnd();
+}
+
+function applyTranspose(text, steps) {
+  if (steps === 0) return text;
+  return text.replace(/\[([A-G][b#]?[^\]]*)\]/g, (_, c) => '[' + transposeChord(c, steps) + ']');
+}
+
+function transpose(delta) {
+  const el = document.getElementById('output-edit');
+  const base = el.value;
+  if (!base) return;
+  semitones = ((semitones + delta) % 12 + 12) % 12;
+  if (semitones > 6) semitones -= 12;
+  document.getElementById('trans-display').textContent = semitones === 0 ? '0' : (semitones > 0 ? '+'+semitones : ''+semitones);
+  el.value = applyTranspose(base, delta);
+}
+
+function runConvert() {
+  const input = document.getElementById('input').value;
+  if (!input.trim()) { document.getElementById('output-edit').value = ''; return; }
+  semitones = 0;
+  document.getElementById('trans-display').textContent = '0';
+  document.getElementById('output-edit').value = doConvert(input);
+  
+  const badge = document.getElementById('auto-badge');
+  badge.classList.add('flash');
+  setTimeout(() => badge.classList.remove('flash'), 800);
+}
+
+document.getElementById('input').addEventListener('input', () => { clearTimeout(autoTimer); autoTimer = setTimeout(runConvert, 180); });
+
+function copyMarkupBuffer() {
+  const data = document.getElementById('output-edit').value;
+  if (!data.trim()) return alert("No operational content to select.");
+  navigator.clipboard.writeText(data).then(() => {
+    alert("ChordPro markup buffer copied cleanly to clipboard.");
+  });
+}
+
+function saveCurrentToShelf() {
+  const currentContent = document.getElementById('output-edit').value;
+  if (!currentContent.trim()) return alert("No live parameters inside compiler target to save.");
+  
+  const requestedTitle = prompt("Enter the name of the song:");
+  if (requestedTitle === null) return; 
+  const cleanTitle = requestedTitle.trim() !== "" ? requestedTitle.trim() : "Untitled Cassette";
+
+  const identityObj = {
+    id: Date.now(),
+    title: cleanTitle,
+    rawPayload: currentContent,
+    colorCode: CASSETTE_COLOR_PALETTE[databaseSongs.length % CASSETTE_COLOR_PALETTE.length]
+  };
+
+  databaseSongs.push(identityObj);
+  localStorage.setItem('vertical_vhs_db_v4', JSON.stringify(databaseSongs));
+  renderShelfUI();
+}
+
+function renderShelfUI() {
+  const containers = document.getElementById('shelf-1');
+  containers.innerHTML = '';
+  
+  const searchFilter = document.getElementById('rack-search').value.toLowerCase().trim();
+  
+  databaseSongs.forEach((item) => {
+    if (searchFilter !== "" && !item.title.toLowerCase().includes(searchFilter)) return;
+
+    const tape = document.createElement('div');
+    tape.className = 'vhs-spine-vertical';
+    tape.style.backgroundColor = item.colorCode;
+    tape.title = `${item.title} (Right-click to discard)`;
+    
+    // Generates the standing layout structure
+    tape.innerHTML = `
+      <div class="vertical-sticker">
+        <span class="vertical-sticker-text">${item.title}</span>
+      </div>
+    `;
+    
+    tape.onclick = () => loadArchivedTrack(item.id);
+    tape.oncontextmenu = (e) => {
+      e.preventDefault();
+      if(confirm(`Erase vertical tape "${item.title}" from storage database?`)) deleteTrack(item.id);
+    };
+    containers.appendChild(tape);
+  });
+  renderQueueUI();
+}
+
+function loadArchivedTrack(id) {
+  const target = databaseSongs.find(s => s.id === id);
+  if(!target) return;
+  semitones = 0;
+  document.getElementById('trans-display').textContent = '0';
+  document.getElementById('input').value = ""; 
+  document.getElementById('output-edit').value = target.rawPayload;
+  
+  if(!currentSetlistQueue.some(s => s.id === id)) {
+    currentSetlistQueue.push(target);
+    renderQueueUI();
+  }
+}
+
+function deleteTrack(id) {
+  databaseSongs = databaseSongs.filter(s => s.id !== id);
+  currentSetlistQueue = currentSetlistQueue.filter(s => s.id !== id);
+  localStorage.setItem('vertical_vhs_db_v4', JSON.stringify(databaseSongs));
+  renderShelfUI();
+}
+
+function renderQueueUI() {
+  const wrapper = document.getElementById('setlist-queue');
+  wrapper.innerHTML = '';
+  currentSetlistQueue.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'queue-item';
+    row.innerHTML = `<span>${item.title}</span><span class="queue-remove" onclick="removeFromQueue(${item.id})">×</span>`;
+    wrapper.appendChild(row);
+  });
+}
+
+function removeFromQueue(id) {
+  currentSetlistQueue = currentSetlistQueue.filter(s => s.id !== id);
+  renderQueueUI();
+}
+
+function convertChordProToClassic(chordproText) {
+  const lines = chordproText.split('\n');
+  const convertedBlocks = [];
+
+  lines.forEach(line => {
+    if (isSectionLine(line) || line.trim() === "") {
+      convertedBlocks.push(line);
+      return;
+    }
+
+    let chordLine = "";
+    let lyricLine = "";
+    let match;
+    const inlineRegex = /\[([^\]]+)\]/g;
+    let currentLinePos = 0;
+
+    while ((match = inlineRegex.exec(line)) !== null) {
+      const chordName = match[1];
+      const inlineIndex = match.index;
+      lyricLine += line.substring(currentLinePos, inlineIndex);
+      const targetColumn = lyricLine.length;
+      
+      if (chordLine.length < targetColumn) {
+        chordLine += " ".repeat(targetColumn - chordLine.length);
+      }
+      chordLine += chordName;
+      currentLinePos = inlineIndex + match[0].length;
+    }
+    
+    lyricLine += line.substring(currentLinePos);
+
+    if (chordLine.trim() !== "") convertedBlocks.push(chordLine);
+    if (lyricLine.trim() !== "") convertedBlocks.push(lyricLine);
+  });
+
+  return convertedBlocks.join('\n');
+}
+
+function generateSetlistPDF() {
+  if(currentSetlistQueue.length === 0) return alert("Select active tape elements from your storage cabinet shelf to prime the export compiler queue.");
+  
+  const labelTitle = document.getElementById('setlist-title').value || 'Setlist Sheet';
+  const labelDate = document.getElementById('setlist-date').value || '';
+
+  let container = document.createElement('div');
+  container.style.padding = '40px';
+  container.style.fontFamily = '"IBM Plex Mono", monospace';
+  container.style.color = '#1c1917';
+  container.style.backgroundColor = '#ffffff';
+
+  let printHeader = `
+    <div style="border-bottom: 3px solid #1c1917; padding-bottom: 12px; margin-bottom: 30px;">
+      <h1 style="font-family: 'Playfair Display', serif; font-size: 26px; margin-bottom: 4px;">${labelTitle}</h1>
+      <p style="font-size: 11px; color: #78716c; text-transform: uppercase; letter-spacing: 0.1em;">Output Date: ${labelDate}</p>
+    </div>
+  `;
+  container.innerHTML += printHeader;
+
+  currentSetlistQueue.forEach((track, index) => {
+    const classicFormatText = convertChordProToClassic(track.rawPayload);
+    const escapedText = classicFormatText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    let section = `
+      <div style="margin-bottom: 35px; page-break-inside: avoid;">
+        <h2 style="font-family: 'Playfair Display', serif; font-size: 16px; border-bottom: 1px solid #d6cfc4; padding-bottom: 4px; margin-bottom: 10px;">
+          ${index + 1}. ${track.title} (Classic Chart Format)
+        </h2>
+        <pre style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; color:#1c1917;">${escapedText}</pre>
+      </div>
+    `;
+    container.innerHTML += section;
+  });
+
+  const optimizationConfig = {
+    margin: [15, 15, 15, 15],
+    filename: `${labelTitle.toLowerCase().replace(/\s+/g, '_')}_setlist.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  html2pdf().set(optimizationConfig).from(container).save();
+}
+</script>
+</body>
+</html>
