@@ -90,6 +90,206 @@ header { padding: 0 28px; height: 52px; background: var(--ink); display: flex; a
 .queue-remove { color: #f43f5e; cursor: pointer; font-weight: bold; margin-left: 8px; }
 
 @media (max-width: 1024px) { .app-container { grid-template-columns: 1fr; } .pane { border-right: none; border-bottom: 1px solid var(--rule); } }
+
+/* Modal Glassmorphism Styling */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(9, 9, 11, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+.modal-content {
+  background: #141416;
+  border: 1px solid #27272a;
+  width: 440px;
+  max-width: 90%;
+  border-radius: 8px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  transform: scale(0.95);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-overlay.active .modal-content {
+  transform: scale(1);
+}
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #27272a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #ffffff;
+}
+.modal-header h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 16px;
+  font-weight: 600;
+}
+.modal-close {
+  color: #71717a;
+  font-size: 20px;
+  cursor: pointer;
+  transition: color 0.1s;
+}
+.modal-close:hover {
+  color: #ffffff;
+}
+.modal-body {
+  padding: 20px;
+  color: #e4e4e7;
+}
+.sync-indicator-modal {
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+  text-align: center;
+  border: 1px solid transparent;
+}
+.sync-indicator-modal.local {
+  background: rgba(39, 39, 42, 0.5);
+  color: #a1a1aa;
+  border-color: #27272a;
+}
+.sync-indicator-modal.active-cloud {
+  background: rgba(26, 92, 69, 0.2);
+  color: #4ade80;
+  border-color: #1a5c45;
+}
+.sync-indicator-modal.active-supabase {
+  background: rgba(146, 64, 14, 0.2);
+  color: #fbbf24;
+  border-color: #92400e;
+}
+.sync-indicator-modal.syncing {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border-color: #2563eb;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.sync-tabs {
+  display: flex;
+  border-bottom: 1px solid #27272a;
+  margin-bottom: 16px;
+}
+.sync-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #71717a;
+  padding: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  transition: color 0.1s, border-bottom 0.1s;
+  border-bottom: 2px solid transparent;
+  outline: none;
+}
+.sync-tab:hover {
+  color: #ffffff;
+}
+.sync-tab.active {
+  color: #ffffff;
+  border-bottom-color: var(--green);
+}
+.tab-panel {
+  display: none;
+}
+.tab-panel.active {
+  display: block;
+}
+.panel-desc {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #a1a1aa;
+  margin-bottom: 16px;
+}
+.form-group {
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+.form-group label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #71717a;
+  font-weight: 700;
+}
+.form-group input {
+  padding: 8px 12px;
+  background: #18181c;
+  border: 1px solid #27272a;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 11px;
+  border-radius: 4px;
+  outline: none;
+  width: 100%;
+}
+.form-group input:focus {
+  border-color: var(--green);
+}
+.modal-footer-actions {
+  margin-top: 20px;
+  border-top: 1px solid #27272a;
+  padding-top: 16px;
+}
+/* Toast Notification */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.toast {
+  padding: 10px 18px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateY(20px);
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.toast.active {
+  transform: translateY(0);
+  opacity: 1;
+}
+.toast.success { background: #1a5c45; border-left: 4px solid #4ade80; }
+.toast.error { background: #7f1d1d; border-left: 4px solid #ef4444; }
+.toast.warning { background: #78350f; border-left: 4px solid #fbbf24; }
 </style>
 </head>
 <body>
@@ -106,8 +306,9 @@ header { padding: 0 28px; height: 52px; background: var(--ink); display: flex; a
   
   <!-- COLUMN 1: SEARCH BAR & STANDING TAPE LIBRARY -->
   <div class="pane library-pane">
-    <div class="pane-bar" style="background: #09090b; border-bottom: 1px solid #27272a;">
+    <div class="pane-bar" style="background: #09090b; border-bottom: 1px solid #27272a; display: flex; align-items: center; justify-content: space-between;">
       <span class="pane-label" style="color: #a1a1aa;">Cassette Base Index</span>
+      <button class="btn" id="sync-settings-btn" onclick="openSyncSettings()" style="background: #18181c; border-color: #27272a; color: #a1a1aa; font-size: 9px; padding: 4px 8px; border-radius: 4px; font-weight: bold; cursor: pointer;">☁️ Sync Settings</button>
     </div>
     <div class="pane-body">
       <div class="shelf-container">
@@ -167,7 +368,7 @@ header { padding: 0 28px; height: 52px; background: var(--ink); display: flex; a
 const CHROMATIC = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const ENHARMONIC = {'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#'};
 let semitones = 0, autoTimer = null;
-let databaseSongs = JSON.parse(localStorage.getItem('vertical_vhs_db_v4')) || [];
+let databaseSongs = [];
 let currentSetlistQueue = [];
 
 const CASSETTE_COLOR_PALETTE = [
@@ -175,10 +376,190 @@ const CASSETTE_COLOR_PALETTE = [
   '#854d0e', '#065f46', '#991b1b', '#1e293b', '#374151'
 ];
 
-document.addEventListener("DOMContentLoaded", () => {
+/* Dynamic Storage Client Pattern */
+const StorageAdapter = {
+  mode: localStorage.getItem('chordpro_sync_mode') || 'local', // 'local' | 'cloud' | 'supabase'
+  syncCode: localStorage.getItem('chordpro_sync_code') || '',
+  supabaseUrl: localStorage.getItem('chordpro_supabase_url') || '',
+  supabaseKey: localStorage.getItem('chordpro_supabase_key') || '',
+  isSyncing: false,
+
+  async getSongs() {
+    this.updateStatusIndicator();
+    if (this.mode === 'supabase' && this.supabaseUrl && this.supabaseKey) {
+      try {
+        const response = await fetch(`${this.supabaseUrl}/rest/v1/songs?sync_code=eq.${encodeURIComponent(this.syncCode)}`, {
+          headers: {
+            'apikey': this.supabaseKey,
+            'Authorization': `Bearer ${this.supabaseKey}`
+          }
+        });
+        if (!response.ok) throw new Error("Supabase read failed");
+        const rows = await response.json();
+        const songs = rows.map(r => ({
+          id: r.id,
+          title: r.title,
+          rawPayload: r.rawPayload,
+          colorCode: r.colorCode
+        }));
+        // Update local cache as backup
+        localStorage.setItem('vertical_vhs_db_v4', JSON.stringify(songs));
+        return songs;
+      } catch (e) {
+        console.error(e);
+        showToast("Supabase cloud offline. Using local backup.", "error");
+        return JSON.parse(localStorage.getItem('vertical_vhs_db_v4')) || [];
+      }
+    } else if (this.mode === 'cloud' && this.syncCode) {
+      try {
+        const response = await fetch(`/api/songs?sync_code=${encodeURIComponent(this.syncCode)}`);
+        if (!response.ok) {
+          const errData = await response.json();
+          if (errData.configured === false) {
+            showToast("Vercel KV not configured on dashboard.", "warning");
+          }
+          throw new Error(errData.error || "KV read failed");
+        }
+        const data = await response.json();
+        const songs = data.songs || [];
+        // Update local cache as backup
+        localStorage.setItem('vertical_vhs_db_v4', JSON.stringify(songs));
+        return songs;
+      } catch (e) {
+        console.error(e);
+        showToast("Cloud sync failed. Using local backup.", "error");
+        return JSON.parse(localStorage.getItem('vertical_vhs_db_v4')) || [];
+      }
+    }
+    // Default fallback to local storage
+    return JSON.parse(localStorage.getItem('vertical_vhs_db_v4')) || [];
+  },
+
+  async saveSongs(songs) {
+    // Always backup to local storage first
+    localStorage.setItem('vertical_vhs_db_v4', JSON.stringify(songs));
+
+    if (this.mode === 'supabase' && this.supabaseUrl && this.supabaseKey) {
+      try {
+        this.setSyncing(true);
+        // Clean out previous records under this sync code
+        await fetch(`${this.supabaseUrl}/rest/v1/songs?sync_code=eq.${encodeURIComponent(this.syncCode)}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': this.supabaseKey,
+            'Authorization': `Bearer ${this.supabaseKey}`
+          }
+        });
+
+        const rows = songs.map(s => ({
+          id: s.id,
+          title: s.title,
+          rawPayload: s.rawPayload,
+          colorCode: s.colorCode,
+          sync_code: this.syncCode
+        }));
+
+        if (rows.length > 0) {
+          const res = await fetch(`${this.supabaseUrl}/rest/v1/songs`, {
+            method: 'POST',
+            headers: {
+              'apikey': this.supabaseKey,
+              'Authorization': `Bearer ${this.supabaseKey}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify(rows)
+          });
+          if (!res.ok) throw new Error("Supabase write failed");
+        }
+        showToast("Synced database with Supabase Cloud", "success");
+      } catch (e) {
+        console.error(e);
+        showToast("Failed to write to Supabase Cloud.", "error");
+      } finally {
+        this.setSyncing(false);
+      }
+    } else if (this.mode === 'cloud' && this.syncCode) {
+      try {
+        this.setSyncing(true);
+        const res = await fetch('/api/songs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sync_code: this.syncCode, songs })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "KV write failed");
+        }
+        showToast("Synced database with Vercel KV Cloud", "success");
+      } catch (e) {
+        console.error(e);
+        showToast("Failed to write to Vercel KV Cloud.", "error");
+      } finally {
+        this.setSyncing(false);
+      }
+    } else {
+      showToast("Saved locally to browser", "success");
+    }
+  },
+
+  setSyncing(val) {
+    this.isSyncing = val;
+    const modalIndicator = document.getElementById('modal-sync-indicator');
+    const headerBtn = document.getElementById('sync-settings-btn');
+    if (val) {
+      if (modalIndicator) {
+        modalIndicator.innerHTML = '🔄 Syncing...';
+        modalIndicator.className = 'sync-indicator-modal syncing';
+      }
+      if (headerBtn) headerBtn.innerHTML = '🔄 Syncing...';
+    } else {
+      this.updateStatusIndicator();
+    }
+  },
+
+  updateStatusIndicator() {
+    const modalIndicator = document.getElementById('modal-sync-indicator');
+    const headerBtn = document.getElementById('sync-settings-btn');
+    
+    if (this.mode === 'supabase') {
+      if (modalIndicator) {
+        modalIndicator.innerHTML = '☁️ Supabase Cloud Active';
+        modalIndicator.className = 'sync-indicator-modal active-supabase';
+      }
+      if (headerBtn) headerBtn.innerHTML = '☁️ Supabase';
+    } else if (this.mode === 'cloud') {
+      if (modalIndicator) {
+        modalIndicator.innerHTML = `☁️ Cloud Active (${this.syncCode})`;
+        modalIndicator.className = 'sync-indicator-modal active-cloud';
+      }
+      if (headerBtn) headerBtn.innerHTML = `☁️ Active (${this.syncCode})`;
+    } else {
+      if (modalIndicator) {
+        modalIndicator.innerHTML = '💾 Local Storage Mode';
+        modalIndicator.className = 'sync-indicator-modal local';
+      }
+      if (headerBtn) headerBtn.innerHTML = '☁️ Sync Settings';
+    }
+  }
+};
+
+document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById('setlist-date').valueAsDate = new Date();
-  renderShelfUI();
+  
+  // Initialize storage inputs from localStorage values
+  document.getElementById('sync-code-input').value = StorageAdapter.syncCode;
+  document.getElementById('supabase-url-input').value = StorageAdapter.supabaseUrl;
+  document.getElementById('supabase-key-input').value = StorageAdapter.supabaseKey;
+  document.getElementById('supabase-sync-code-input').value = StorageAdapter.syncCode;
+  
+  await triggerSyncPull();
 });
+
+async function triggerSyncPull() {
+  databaseSongs = await StorageAdapter.getSongs();
+  renderShelfUI();
+}
 
 function normalizeChord(c) { return ENHARMONIC[c] || c; }
 
@@ -325,15 +706,15 @@ document.getElementById('input').addEventListener('input', () => { clearTimeout(
 
 function copyMarkupBuffer() {
   const data = document.getElementById('output-edit').value;
-  if (!data.trim()) return alert("No operational content to select.");
+  if (!data.trim()) return showToast("No operational content to select.", "warning");
   navigator.clipboard.writeText(data).then(() => {
-    alert("ChordPro markup buffer copied cleanly to clipboard.");
+    showToast("ChordPro markup buffer copied cleanly to clipboard.", "success");
   });
 }
 
-function saveCurrentToShelf() {
+async function saveCurrentToShelf() {
   const currentContent = document.getElementById('output-edit').value;
-  if (!currentContent.trim()) return alert("No live parameters inside compiler target to save.");
+  if (!currentContent.trim()) return showToast("No live parameters inside compiler target to save.", "warning");
   
   const requestedTitle = prompt("Enter the name of the song:");
   if (requestedTitle === null) return; 
@@ -347,7 +728,7 @@ function saveCurrentToShelf() {
   };
 
   databaseSongs.push(identityObj);
-  localStorage.setItem('vertical_vhs_db_v4', JSON.stringify(databaseSongs));
+  await StorageAdapter.saveSongs(databaseSongs);
   renderShelfUI();
 }
 
@@ -396,10 +777,10 @@ function loadArchivedTrack(id) {
   }
 }
 
-function deleteTrack(id) {
+async function deleteTrack(id) {
   databaseSongs = databaseSongs.filter(s => s.id !== id);
   currentSetlistQueue = currentSetlistQueue.filter(s => s.id !== id);
-  localStorage.setItem('vertical_vhs_db_v4', JSON.stringify(databaseSongs));
+  await StorageAdapter.saveSongs(databaseSongs);
   renderShelfUI();
 }
 
@@ -458,7 +839,7 @@ function convertChordProToClassic(chordproText) {
 }
 
 function generateSetlistPDF() {
-  if(currentSetlistQueue.length === 0) return alert("Select active tape elements from your storage cabinet shelf to prime the export compiler queue.");
+  if(currentSetlistQueue.length === 0) return showToast("Select active tape elements from your storage cabinet shelf to prime the export compiler queue.", "warning");
   
   const labelTitle = document.getElementById('setlist-title').value || 'Setlist Sheet';
   const labelDate = document.getElementById('setlist-date').value || '';
@@ -502,6 +883,174 @@ function generateSetlistPDF() {
 
   html2pdf().set(optimizationConfig).from(container).save();
 }
+
+/* Modal UI Interactions */
+function openSyncSettings() {
+  document.getElementById('sync-modal').classList.add('active');
+  switchSyncTab(StorageAdapter.mode === 'supabase' ? 'supabase' : 'cloud');
+  StorageAdapter.updateStatusIndicator();
+}
+
+function closeSyncSettings() {
+  document.getElementById('sync-modal').classList.remove('active');
+}
+
+function switchSyncTab(tab) {
+  document.querySelectorAll('.sync-tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
+
+  if (tab === 'supabase') {
+    document.getElementById('tab-supabase').classList.add('active');
+    document.getElementById('panel-supabase').classList.add('active');
+  } else {
+    document.getElementById('tab-cloud').classList.add('active');
+    document.getElementById('panel-cloud').classList.add('active');
+  }
+}
+
+function generateRandomSyncCode() {
+  const letters = 'abcdefghijklmnopqrstuvwxyz';
+  const numbers = '0123456789';
+  let code = 'shelf-';
+  for (let i = 0; i < 3; i++) code += letters.charAt(Math.floor(Math.random() * letters.length));
+  code += '-';
+  for (let i = 0; i < 3; i++) code += numbers.charAt(Math.floor(Math.random() * numbers.length));
+  
+  document.getElementById('sync-code-input').value = code;
+  showToast("Generated new Sync Code: " + code, "success");
+}
+
+async function applySyncCode() {
+  const val = document.getElementById('sync-code-input').value.trim();
+  if (!val) return showToast("Sync Code cannot be empty.", "error");
+
+  StorageAdapter.mode = 'cloud';
+  StorageAdapter.syncCode = val;
+  
+  localStorage.setItem('chordpro_sync_mode', 'cloud');
+  localStorage.setItem('chordpro_sync_code', val);
+  
+  showToast("Cloud sync configured to: " + val, "success");
+  await triggerSyncPull();
+  closeSyncSettings();
+}
+
+async function applySupabaseSettings() {
+  const url = document.getElementById('supabase-url-input').value.trim();
+  const key = document.getElementById('supabase-key-input').value.trim();
+  const partition = document.getElementById('supabase-sync-code-input').value.trim();
+
+  if (!url || !key) {
+    return showToast("Supabase URL and API Key are required.", "error");
+  }
+
+  StorageAdapter.mode = 'supabase';
+  StorageAdapter.supabaseUrl = url;
+  StorageAdapter.supabaseKey = key;
+  StorageAdapter.syncCode = partition || 'default-partition';
+
+  localStorage.setItem('chordpro_sync_mode', 'supabase');
+  localStorage.setItem('chordpro_supabase_url', url);
+  localStorage.setItem('chordpro_supabase_key', key);
+  localStorage.setItem('chordpro_sync_code', StorageAdapter.syncCode);
+
+  showToast("Private Supabase configured successfully.", "success");
+  await triggerSyncPull();
+  closeSyncSettings();
+}
+
+async function disableCloudSync() {
+  StorageAdapter.mode = 'local';
+  localStorage.setItem('chordpro_sync_mode', 'local');
+  
+  showToast("Disconnected from cloud. Switched to local storage.", "warning");
+  await triggerSyncPull();
+  closeSyncSettings();
+}
+
+/* Elegant Toast Engine */
+function showToast(message, type = 'success') {
+  let container = document.getElementById('toast-wrapper');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-wrapper';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  
+  let icon = '⚡';
+  if (type === 'success') icon = '✓';
+  if (type === 'error') icon = '⚠️';
+  if (type === 'warning') icon = '☁️';
+  
+  toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+  container.appendChild(toast);
+
+  // Trigger browser paint to enable smooth transition
+  setTimeout(() => toast.classList.add('active'), 10);
+
+  setTimeout(() => {
+    toast.classList.remove('active');
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
 </script>
+
+<!-- Sync Settings Modal HTML -->
+<div id="sync-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Cloud Sync Settings</h3>
+      <span class="modal-close" onclick="closeSyncSettings()">&times;</span>
+    </div>
+    <div class="modal-body">
+      <div class="sync-indicator-modal local" id="modal-sync-indicator">💾 Local Storage Mode</div>
+      
+      <div class="sync-tabs">
+        <button class="sync-tab active" id="tab-cloud" onclick="switchSyncTab('cloud')">Instant Sync Code</button>
+        <button class="sync-tab" id="tab-supabase" onclick="switchSyncTab('supabase')">Private Supabase</button>
+      </div>
+
+      <!-- Sync Code Tab Panel -->
+      <div id="panel-cloud" class="tab-panel active">
+        <p class="panel-desc">Generate a secure room code to sync your cassettes instantly across multiple browsers or devices.</p>
+        <div class="form-group">
+          <label>Your Sync Code</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="sync-code-input" placeholder="e.g. shelf-abc-123" />
+            <button class="btn" style="background: #27272a; border-color: #3f3f46; color: #fff;" onclick="generateRandomSyncCode()">Generate</button>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 14px; font-weight: 700; padding: 10px;" onclick="applySyncCode()">Activate Sync Code</button>
+      </div>
+
+      <!-- Supabase Tab Panel -->
+      <div id="panel-supabase" class="tab-panel">
+        <p class="panel-desc">Plug in your own personal Supabase database for absolute privacy and data ownership.</p>
+        <div class="form-group">
+          <label>Supabase Project URL</label>
+          <input type="text" id="supabase-url-input" placeholder="https://xxxxxx.supabase.co" />
+        </div>
+        <div class="form-group">
+          <label>Supabase Anon API Key</label>
+          <input type="password" id="supabase-key-input" placeholder="eyJhbGciOi..." />
+        </div>
+        <div class="form-group">
+          <label>Sync Code / Partition Name</label>
+          <input type="text" id="supabase-sync-code-input" placeholder="my-private-songs" />
+        </div>
+        <button class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 14px; font-weight: 700; padding: 10px;" onclick="applySupabaseSettings()">Activate Supabase</button>
+      </div>
+
+      <div class="modal-footer-actions">
+        <button class="btn" style="background: transparent; color: #ef4444; border-color: #ef4444; width: 100%; justify-content: center; padding: 8px;" onclick="disableCloudSync()">Disconnect & Return to Local Storage</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
