@@ -40,7 +40,22 @@ export default async function handler(req, res) {
       }
 
       const data = await response.json();
-      const songs = data.result ? JSON.parse(data.result) : [];
+      let songs = [];
+      if (data.result) {
+        try {
+          songs = JSON.parse(data.result);
+          // If the data was stored double-serialized, parse it once more
+          if (typeof songs === 'string') {
+            songs = JSON.parse(songs);
+          }
+          if (!Array.isArray(songs)) {
+            songs = [];
+          }
+        } catch (e) {
+          console.error("Failed to parse songs from KV:", e);
+          songs = [];
+        }
+      }
       
       return res.status(200).json({ songs, configured: true });
     }
@@ -56,14 +71,14 @@ export default async function handler(req, res) {
 
       const key = `songs_${sync_code.trim().toLowerCase()}`;
       
-      // Store the stringified array in Upstash Redis
+      // Store the stringified array in Upstash Redis (single serialization)
       const response = await fetch(`${KV_URL}/set/${key}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${KV_TOKEN}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(JSON.stringify(songs))
+        body: JSON.stringify(songs)
       });
 
       if (!response.ok) {

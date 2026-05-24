@@ -386,6 +386,20 @@ const StorageAdapter = {
 
   async getSongs() {
     this.updateStatusIndicator();
+    
+    // Defensive local storage helper
+    const parseLocalBackup = () => {
+      try {
+        const val = localStorage.getItem('vertical_vhs_db_v4');
+        if (!val) return [];
+        const parsed = JSON.parse(val);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.error("Local parse error:", e);
+        return [];
+      }
+    };
+
     if (this.mode === 'supabase' && this.supabaseUrl && this.supabaseKey) {
       try {
         const response = await fetch(`${this.supabaseUrl}/rest/v1/songs?sync_code=eq.${encodeURIComponent(this.syncCode)}`, {
@@ -408,7 +422,7 @@ const StorageAdapter = {
       } catch (e) {
         console.error(e);
         showToast("Supabase cloud offline. Using local backup.", "error");
-        return JSON.parse(localStorage.getItem('vertical_vhs_db_v4')) || [];
+        return parseLocalBackup();
       }
     } else if (this.mode === 'cloud' && this.syncCode) {
       try {
@@ -421,18 +435,31 @@ const StorageAdapter = {
           throw new Error(errData.error || "KV read failed");
         }
         const data = await response.json();
-        const songs = data.songs || [];
+        let songs = data.songs || [];
+        
+        // Fully parse stringified payload if double-serialized
+        if (typeof songs === 'string') {
+          try {
+            songs = JSON.parse(songs);
+          } catch(e) {
+            songs = [];
+          }
+        }
+        if (!Array.isArray(songs)) {
+          songs = [];
+        }
+
         // Update local cache as backup
         localStorage.setItem('vertical_vhs_db_v4', JSON.stringify(songs));
         return songs;
       } catch (e) {
         console.error(e);
         showToast("Cloud sync failed. Using local backup.", "error");
-        return JSON.parse(localStorage.getItem('vertical_vhs_db_v4')) || [];
+        return parseLocalBackup();
       }
     }
     // Default fallback to local storage
-    return JSON.parse(localStorage.getItem('vertical_vhs_db_v4')) || [];
+    return parseLocalBackup();
   },
 
   async saveSongs(songs) {
