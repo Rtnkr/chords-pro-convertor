@@ -944,160 +944,155 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-function generateSetlistPDF() {
+// ── Reusable card HTML builder (measuring + final render) ─────────────────
+function buildCardHTML(track, index) {
+  const bodyHTML = renderSongToHTML(track.rawPayload);
+  return `
+    <div style="border:1px solid #e7e5e4;border-radius:6px;background:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.06);overflow:visible;">
+      <div style="background:#1c1917;padding:7px 12px;border-radius:5px 5px 0 0;">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:700;color:#a8a29e;letter-spacing:0.1em;margin-right:8px;">${String(index + 1).padStart(2,'0')}</span>
+        <span style="font-family:'Playfair Display',serif;font-size:13px;font-weight:700;color:#faf8f4;">${escHtml(track.title)}</span>
+      </div>
+      <div style="padding:10px 12px 14px 12px;overflow:visible;font-family:'IBM Plex Mono',monospace;">
+        ${bodyHTML}
+      </div>
+    </div>
+  `;
+}
+
+async function generateSetlistPDF() {
   if(currentSetlistQueue.length === 0) return showToast("Select active tape elements from your storage cabinet shelf to prime the export compiler queue.", "warning");
 
   const labelTitle = document.getElementById('setlist-title').value || 'Setlist Sheet';
   const labelDate  = document.getElementById('setlist-date').value  || '';
-
-  // Format date nicely
   let dateStr = '';
   if (labelDate) {
-    try {
-      dateStr = new Date(labelDate + 'T00:00:00').toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
-    } catch(e) { dateStr = labelDate; }
+    try { dateStr = new Date(labelDate + 'T00:00:00').toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }); }
+    catch(e) { dateStr = labelDate; }
   }
 
-  // ── Build song card HTML function ──────────────────────────────────────────
-  const buildCard = (track, index) => {
-    const bodyHTML = renderSongToHTML(track.rawPayload);
-    return `
-      <div style="
-        page-break-inside: avoid;
-        border: 1px solid #e7e5e4;
-        border-radius: 6px;
-        background: #ffffff;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-        overflow: visible;
-      ">
-        <!-- Song title bar -->
-        <div style="
-          background: #1c1917;
-          padding: 7px 12px;
-          border-radius: 5px 5px 0 0;
-        ">
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:700;color:#a8a29e;letter-spacing:0.1em;margin-right:8px;">${String(index + 1).padStart(2,'0')}</span>
-          <span style="font-family:'Playfair Display',serif;font-size:13px;font-weight:700;color:#faf8f4;">${escHtml(track.title)}</span>
-        </div>
-        <!-- Song body -->
-        <div style="padding: 10px 12px 14px 12px; overflow: visible;">
-          ${bodyHTML}
-        </div>
-      </div>
-    `;
-  };
+  // ── A4 page geometry ───────────────────────────────────────────────────────
+  // Each page is a FIXED 794 x 1123 px div. html2pdf renders every page as its
+  // own canvas snapshot and stitches them together — no mid-line slicing ever.
+  const PW      = 794;   // A4 width  at 96 dpi
+  const PH      = 1123;  // A4 height at 96 dpi
+  const PAD     = 28;    // page padding (all sides)
+  const CGAP    = 16;    // gap between the two columns
+  const VGAP    = 14;    // vertical gap between cards
+  const FOOT_H  = 40;    // footer height
+  const HEAD_H  = 118;   // header + legend (first page only)
 
-  // ── Pair songs into rows of two ──────────────────────────────────────────────
-  // We use an HTML table for the 2-column layout because html2pdf handles
-  // table cells correctly: each row breaks across pages as a unit, songs
-  // never split mid-content, and columns flow left→right→next-row naturally.
-  let rowsHTML = '';
-  for (let i = 0; i < currentSetlistQueue.length; i += 2) {
-    const left  = currentSetlistQueue[i];
-    const right = currentSetlistQueue[i + 1];
-    rowsHTML += `
-      <tr style="page-break-inside: avoid;">
-        <td style="vertical-align: top; padding: 0 8px 16px 0; width: 50%;">
-          ${buildCard(left, i)}
-        </td>
-        <td style="vertical-align: top; padding: 0 0 16px 8px; width: 50%;">
-          ${right ? buildCard(right, i + 1) : ''}
-        </td>
-      </tr>
-    `;
+  const COL_W      = (PW - PAD * 2 - CGAP) / 2;  // ~361 px
+  const COL_H_P1   = PH - PAD * 2 - HEAD_H - FOOT_H;  // first page col height
+  const COL_H_REST = PH - PAD * 2 - FOOT_H;            // other pages col height
+
+  // ── Measure each card off-screen ───────────────────────────────────────────
+  showToast("Preparing PDF…", "success");
+  await new Promise(r => setTimeout(r, 60));
+
+  const probe = document.createElement('div');
+  probe.style.cssText = `position:fixed;left:-9999px;top:0;width:${COL_W}px;visibility:hidden;pointer-events:none;font-family:'IBM Plex Mono',monospace;font-size:9.5px;`;
+  document.body.appendChild(probe);
+
+  const heights = currentSetlistQueue.map((track, i) => {
+    probe.innerHTML = buildCardHTML(track, i);
+    return probe.offsetHeight;
+  });
+  document.body.removeChild(probe);
+
+  // ── Greedy bin-pack: left col → right col → new page ──────────────────────
+  const pages = [];
+  let pg   = { left: [], right: [] };
+  let side = 'left';
+  let used = 0;
+  let cap  = COL_H_P1;
+
+  for (let i = 0; i < currentSetlistQueue.length; i++) {
+    const h = heights[i] + VGAP;
+    if (used + h > cap) {
+      if (side === 'left') {
+        side = 'right'; used = 0;          // spill to right column
+      } else {
+        pages.push(pg);                    // both columns full → new page
+        pg   = { left: [], right: [] };
+        side = 'left'; used = 0;
+        cap  = COL_H_REST;
+      }
+    }
+    pg[side].push(i);
+    used += h;
   }
-  const songCards = `<table style="width:100%; border-collapse:collapse; table-layout:fixed;">${rowsHTML}</table>`;
+  pages.push(pg);
 
-  // ── Full page HTML ──────────────────────────────────────────────────────────
-  const pageHTML = `
-    <div style="
-      font-family:'IBM Plex Mono',monospace;
-      background:#f5f0e8;
-      padding: 28px 28px 20px 28px;
-      min-height: 100%;
-      box-sizing: border-box;
-    ">
-      <!-- Page header -->
-      <div style="
-        border-bottom: 3px solid #1c1917;
-        padding-bottom: 14px;
-        margin-bottom: 22px;
-        display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-      ">
+  // ── HTML builders ──────────────────────────────────────────────────────────
+  const M = "font-family:'IBM Plex Mono',monospace;";
+
+  function colHTML(idxs) {
+    return idxs.map(i =>
+      `<div style="margin-bottom:${VGAP}px;">${buildCardHTML(currentSetlistQueue[i], i)}</div>`
+    ).join('');
+  }
+
+  function pageDiv(pi, data) {
+    const first = pi === 0;
+
+    const header = first ? `
+      <div style="border-bottom:3px solid #1c1917;padding-bottom:14px;margin-bottom:16px;display:flex;align-items:flex-end;justify-content:space-between;">
         <div>
-          <div style="
-            font-size:8px;
-            font-weight:700;
-            letter-spacing:0.18em;
-            text-transform:uppercase;
-            color:#92400e;
-            margin-bottom:4px;
-          ">ChordPro Studio · Setlist</div>
-          <div style="
-            font-family:'Playfair Display',serif;
-            font-size:26px;
-            font-weight:700;
-            color:#1c1917;
-            line-height:1.1;
-          ">${escHtml(labelTitle)}</div>
+          <div style="${M}font-size:8px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#92400e;margin-bottom:4px;">ChordPro Studio · Setlist</div>
+          <div style="font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:#1c1917;line-height:1.1;">${escHtml(labelTitle)}</div>
         </div>
         <div style="text-align:right;">
-          <div style="font-size:9px;color:#78716c;">${dateStr}</div>
-          <div style="font-size:9px;color:#a8a29e;margin-top:2px;">${currentSetlistQueue.length} song${currentSetlistQueue.length !== 1 ? 's' : ''}</div>
+          <div style="${M}font-size:9px;color:#78716c;">${dateStr}</div>
+          <div style="${M}font-size:9px;color:#a8a29e;margin-top:2px;">${currentSetlistQueue.length} song${currentSetlistQueue.length !== 1 ? 's' : ''}</div>
         </div>
       </div>
-
-      <!-- Legend -->
-      <div style="
-        display:flex;
-        gap:20px;
-        margin-bottom:16px;
-        font-size:8px;
-        color:#78716c;
-        letter-spacing:0.06em;
-      ">
+      <div style="${M}display:flex;gap:20px;margin-bottom:16px;font-size:8px;color:#78716c;letter-spacing:0.06em;">
         <span><span style="color:#1d4ed8;font-weight:700;">■</span> Chords</span>
         <span><span style="color:#1c1917;">■</span> Lyrics</span>
         <span><span style="color:#92400e;background:#fef3c7;padding:1px 4px;border-radius:2px;font-size:7px;">SECTION</span> Section</span>
-      </div>
+      </div>` : '';
 
-      <!-- 2-column song grid (table-based for reliable pdf rendering) -->
-      ${songCards}
+    const footer = `
+      <div style="position:absolute;bottom:${PAD}px;left:${PAD}px;right:${PAD}px;border-top:1px solid #d6cfc4;padding-top:8px;display:flex;justify-content:space-between;${M}font-size:8px;color:#a8a29e;letter-spacing:0.06em;">
+        <span>ChordPro Studio</span>
+        <span>${escHtml(labelTitle)}${dateStr ? ' · ' + dateStr : ''} · p.${pi + 1}/${pages.length}</span>
+      </div>`;
 
-      <!-- Footer -->
-      <div style="
-        margin-top: 24px;
-        border-top: 1px solid #d6cfc4;
-        padding-top: 10px;
-        display: flex;
-        justify-content: space-between;
-        font-size: 8px;
-        color: #a8a29e;
-        letter-spacing: 0.06em;
-      ">
-        <span>Generated by ChordPro Studio</span>
-        <span>${escHtml(labelTitle)} · ${dateStr}</span>
-      </div>
-    </div>
-  `;
+    return `
+      <div style="width:${PW}px;height:${PH}px;background:#f5f0e8;padding:${PAD}px;box-sizing:border-box;position:relative;overflow:hidden;page-break-after:always;">
+        ${header}
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
+          <colgroup>
+            <col style="width:${COL_W}px;"><col style="width:${CGAP}px;"><col style="width:${COL_W}px;">
+          </colgroup>
+          <tr>
+            <td style="vertical-align:top;padding:0;">${colHTML(data.left)}</td>
+            <td style="width:${CGAP}px;"></td>
+            <td style="vertical-align:top;padding:0;">${colHTML(data.right)}</td>
+          </tr>
+        </table>
+        ${footer}
+      </div>`;
+  }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-  const container = document.createElement('div');
-  container.innerHTML = pageHTML;
+  // ── Assemble & export ──────────────────────────────────────────────────────
+  const wrapper = document.createElement('div');
+  wrapper.style.width = PW + 'px';
+  wrapper.innerHTML = pages.map((p, i) => pageDiv(i, p)).join('');
 
   const filename = `${labelTitle.toLowerCase().replace(/\s+/g, '_')}_setlist.pdf`;
 
   html2pdf()
     .set({
-      margin:        [0, 0, 0, 0],
-      filename:      filename,
-      image:         { type: 'jpeg', quality: 0.98 },
-      html2canvas:   { scale: 2, useCORS: true, letterRendering: true },
-      jsPDF:         { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      margin:      0,
+      filename:    filename,
+      image:       { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true, width: PW },
+      jsPDF:       { unit: 'px', format: [PW, PH], orientation: 'portrait' },
+      pagebreak:   { mode: ['css'] }
     })
-    .from(container)
+    .from(wrapper)
     .save();
 }
 
