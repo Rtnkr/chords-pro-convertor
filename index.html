@@ -958,49 +958,55 @@ function generateSetlistPDF() {
     } catch(e) { dateStr = labelDate; }
   }
 
-  // ── Build song card HTML array ──────────────────────────────────────────────
-  const songCards = currentSetlistQueue.map((track, index) => {
+  // ── Build song card HTML function ──────────────────────────────────────────
+  const buildCard = (track, index) => {
     const bodyHTML = renderSongToHTML(track.rawPayload);
     return `
       <div style="
-        break-inside: avoid-column;
         page-break-inside: avoid;
-        margin-bottom: 20px;
         border: 1px solid #e7e5e4;
         border-radius: 6px;
-        overflow: hidden;
         background: #ffffff;
         box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        overflow: visible;
       ">
         <!-- Song title bar -->
         <div style="
           background: #1c1917;
           padding: 7px 12px;
-          display: flex;
-          align-items: baseline;
-          gap: 8px;
+          border-radius: 5px 5px 0 0;
         ">
-          <span style="
-            font-family:'IBM Plex Mono',monospace;
-            font-size:8px;
-            font-weight:700;
-            color:#a8a29e;
-            letter-spacing:0.1em;
-          ">${String(index + 1).padStart(2,'0')}</span>
-          <span style="
-            font-family:'Playfair Display',serif;
-            font-size:13px;
-            font-weight:700;
-            color:#faf8f4;
-          ">${escHtml(track.title)}</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:700;color:#a8a29e;letter-spacing:0.1em;margin-right:8px;">${String(index + 1).padStart(2,'0')}</span>
+          <span style="font-family:'Playfair Display',serif;font-size:13px;font-weight:700;color:#faf8f4;">${escHtml(track.title)}</span>
         </div>
         <!-- Song body -->
-        <div style="padding: 10px 12px 12px 12px; overflow:hidden;">
+        <div style="padding: 10px 12px 14px 12px; overflow: visible;">
           ${bodyHTML}
         </div>
       </div>
     `;
-  }).join('');
+  };
+
+  // ── Pair songs into rows of two ──────────────────────────────────────────────
+  // We use an HTML table for the 2-column layout because html2pdf handles
+  // table cells correctly: each row breaks across pages as a unit, songs
+  // never split mid-content, and columns flow left→right→next-row naturally.
+  let rowsHTML = '';
+  for (let i = 0; i < currentSetlistQueue.length; i += 2) {
+    const left  = currentSetlistQueue[i];
+    const right = currentSetlistQueue[i + 1];
+    rowsHTML += `
+      <tr style="page-break-inside: avoid;">
+        <td style="vertical-align: top; padding: 0 8px 16px 0; width: 50%;">
+          ${buildCard(left, i)}
+        </td>
+        <td style="vertical-align: top; padding: 0 0 16px 8px; width: 50%;">
+          ${right ? buildCard(right, i + 1) : ''}
+        </td>
+      </tr>
+    `;
+  }
+  const songCards = `<table style="width:100%; border-collapse:collapse; table-layout:fixed;">${rowsHTML}</table>`;
 
   // ── Full page HTML ──────────────────────────────────────────────────────────
   const pageHTML = `
@@ -1057,14 +1063,8 @@ function generateSetlistPDF() {
         <span><span style="color:#92400e;background:#fef3c7;padding:1px 4px;border-radius:2px;font-size:7px;">SECTION</span> Section</span>
       </div>
 
-      <!-- 2-column song grid -->
-      <div style="
-        column-count: 2;
-        column-gap: 16px;
-        column-fill: balance;
-      ">
-        ${songCards}
-      </div>
+      <!-- 2-column song grid (table-based for reliable pdf rendering) -->
+      ${songCards}
 
       <!-- Footer -->
       <div style="
