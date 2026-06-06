@@ -827,89 +827,280 @@ function removeFromQueue(id) {
   renderQueueUI();
 }
 
-function convertChordProToClassic(chordproText) {
-  const lines = chordproText.split('\n');
-  const convertedBlocks = [];
+// Parses a ChordPro line into {chords: [{text, col}], lyric: string}
+// Returns null if the line has no chords
+function parseChordProLine(line) {
+  const inlineRegex = /\[([^\]]+)\]/g;
+  let match;
+  const chords = [];
+  let lyric = '';
+  let pos = 0;
+  while ((match = inlineRegex.exec(line)) !== null) {
+    lyric += line.substring(pos, match.index);
+    chords.push({ text: match[1], col: lyric.length });
+    pos = match.index + match[0].length;
+  }
+  lyric += line.substring(pos);
+  if (chords.length === 0) return null;
+  return { chords, lyric: lyric.trimEnd() };
+}
 
-  lines.forEach(line => {
-    if (isSectionLine(line) || line.trim() === "") {
-      convertedBlocks.push(line);
-      return;
+// Renders a single song's ChordPro into an HTML block suitable for PDF
+// Chord lines rendered in bold blue, lyrics in dark ink
+function renderSongToHTML(rawPayload) {
+  const lines = rawPayload.split('\n');
+  let html = '';
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Empty line → spacer
+    if (trimmed === '') {
+      html += `<div style="height:6px;"></div>`;
+      continue;
     }
 
-    let chordLine = "";
-    let lyricLine = "";
-    let match;
-    const inlineRegex = /\[([^\]]+)\]/g;
-    let currentLinePos = 0;
+    // Section header e.g. [Verse 1]
+    if (isSectionLine(trimmed)) {
+      const label = trimmed.replace(/^\[/, '').replace(/\]$/, '');
+      html += `<div style="
+        font-family:'IBM Plex Mono',monospace;
+        font-size:8px;
+        font-weight:700;
+        letter-spacing:0.14em;
+        text-transform:uppercase;
+        color:#92400e;
+        background:#fef3c7;
+        border-left:3px solid #d97706;
+        padding:3px 6px;
+        margin:10px 0 4px 0;
+        border-radius:2px;
+      ">${label}</div>`;
+      continue;
+    }
 
-    while ((match = inlineRegex.exec(line)) !== null) {
-      const chordName = match[1];
-      const inlineIndex = match.index;
-      lyricLine += line.substring(currentLinePos, inlineIndex);
-      const targetColumn = lyricLine.length;
-      
-      if (chordLine.length < targetColumn) {
-        chordLine += " ".repeat(targetColumn - chordLine.length);
+    // ChordPro inline chord line
+    if (isInlineChordLine(trimmed)) {
+      const parsed = parseChordProLine(line);
+      if (parsed) {
+        // Build chord row – position chords using letter-spaced spans
+        let chordRowHtml = buildChordRow(parsed.chords, parsed.lyric);
+        let lyricClean = parsed.lyric;
+
+        html += `<div style="line-height:1; margin-bottom:1px;">`;
+        html += chordRowHtml;
+        html += `</div>`;
+        if (lyricClean.trim()) {
+          html += `<div style="
+            font-family:'IBM Plex Mono',monospace;
+            font-size:9.5px;
+            color:#1c1917;
+            line-height:1.5;
+            margin-bottom:3px;
+            white-space:pre;
+          ">${escHtml(lyricClean)}</div>`;
+        }
+        continue;
       }
-      chordLine += chordName;
-      currentLinePos = inlineIndex + match[0].length;
     }
-    
-    lyricLine += line.substring(currentLinePos);
 
-    if (chordLine.trim() !== "") convertedBlocks.push(chordLine);
-    if (lyricLine.trim() !== "") convertedBlocks.push(lyricLine);
+    // Plain lyric / chord-only line
+    html += `<div style="
+      font-family:'IBM Plex Mono',monospace;
+      font-size:9.5px;
+      color:#44403c;
+      line-height:1.5;
+      white-space:pre;
+    ">${escHtml(trimmed)}</div>`;
+  }
+
+  return html;
+}
+
+// Build a chord row HTML using absolute-position-like letter-spacing trick
+function buildChordRow(chords, lyric) {
+  // We build the chord line as a relative-positioned container
+  // Chords are placed at their column positions using character-width estimation
+  // At font-size 9px monospace, each char ≈ 5.4px
+  const CHAR_W = 5.4; // px per char at 9px IBM Plex Mono
+
+  let maxRight = 0;
+  const spans = chords.map(ch => {
+    const left = ch.col * CHAR_W;
+    const right = left + ch.text.length * CHAR_W;
+    if (right > maxRight) maxRight = right;
+    return `<span style="position:absolute;left:${left.toFixed(1)}px;top:0;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:700;color:#1d4ed8;letter-spacing:0;">${escHtml(ch.text)}</span>`;
   });
 
-  return convertedBlocks.join('\n');
+  // Also account for lyric width
+  const lyricRight = (lyric.length || 0) * CHAR_W;
+  const containerW = Math.max(maxRight, lyricRight);
+
+  return `<div style="position:relative;height:14px;min-width:${containerW.toFixed(0)}px;overflow:visible;">${spans.join('')}</div>`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function generateSetlistPDF() {
   if(currentSetlistQueue.length === 0) return showToast("Select active tape elements from your storage cabinet shelf to prime the export compiler queue.", "warning");
-  
+
   const labelTitle = document.getElementById('setlist-title').value || 'Setlist Sheet';
-  const labelDate = document.getElementById('setlist-date').value || '';
+  const labelDate  = document.getElementById('setlist-date').value  || '';
 
-  let container = document.createElement('div');
-  container.style.padding = '40px';
-  container.style.fontFamily = '"IBM Plex Mono", monospace';
-  container.style.color = '#1c1917';
-  container.style.backgroundColor = '#ffffff';
+  // Format date nicely
+  let dateStr = '';
+  if (labelDate) {
+    try {
+      dateStr = new Date(labelDate + 'T00:00:00').toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+    } catch(e) { dateStr = labelDate; }
+  }
 
-  let printHeader = `
-    <div style="border-bottom: 3px solid #1c1917; padding-bottom: 12px; margin-bottom: 30px;">
-      <h1 style="font-family: 'Playfair Display', serif; font-size: 26px; margin-bottom: 4px;">${labelTitle}</h1>
-      <p style="font-size: 11px; color: #78716c; text-transform: uppercase; letter-spacing: 0.1em;">Output Date: ${labelDate}</p>
-    </div>
-  `;
-  container.innerHTML += printHeader;
-
-  currentSetlistQueue.forEach((track, index) => {
-    const classicFormatText = convertChordProToClassic(track.rawPayload);
-    const escapedText = classicFormatText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-    let section = `
-      <div style="margin-bottom: 35px; page-break-inside: avoid;">
-        <h2 style="font-family: 'Playfair Display', serif; font-size: 16px; border-bottom: 1px solid #d6cfc4; padding-bottom: 4px; margin-bottom: 10px;">
-          ${index + 1}. ${track.title} (Classic Chart Format)
-        </h2>
-        <pre style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; color:#1c1917;">${escapedText}</pre>
+  // ── Build song card HTML array ──────────────────────────────────────────────
+  const songCards = currentSetlistQueue.map((track, index) => {
+    const bodyHTML = renderSongToHTML(track.rawPayload);
+    return `
+      <div style="
+        break-inside: avoid-column;
+        page-break-inside: avoid;
+        margin-bottom: 20px;
+        border: 1px solid #e7e5e4;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      ">
+        <!-- Song title bar -->
+        <div style="
+          background: #1c1917;
+          padding: 7px 12px;
+          display: flex;
+          align-items: baseline;
+          gap: 8px;
+        ">
+          <span style="
+            font-family:'IBM Plex Mono',monospace;
+            font-size:8px;
+            font-weight:700;
+            color:#a8a29e;
+            letter-spacing:0.1em;
+          ">${String(index + 1).padStart(2,'0')}</span>
+          <span style="
+            font-family:'Playfair Display',serif;
+            font-size:13px;
+            font-weight:700;
+            color:#faf8f4;
+          ">${escHtml(track.title)}</span>
+        </div>
+        <!-- Song body -->
+        <div style="padding: 10px 12px 12px 12px; overflow:hidden;">
+          ${bodyHTML}
+        </div>
       </div>
     `;
-    container.innerHTML += section;
-  });
+  }).join('');
 
-  const optimizationConfig = {
-    margin: [15, 15, 15, 15],
-    filename: `${labelTitle.toLowerCase().replace(/\s+/g, '_')}_setlist.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  };
+  // ── Full page HTML ──────────────────────────────────────────────────────────
+  const pageHTML = `
+    <div style="
+      font-family:'IBM Plex Mono',monospace;
+      background:#f5f0e8;
+      padding: 28px 28px 20px 28px;
+      min-height: 100%;
+      box-sizing: border-box;
+    ">
+      <!-- Page header -->
+      <div style="
+        border-bottom: 3px solid #1c1917;
+        padding-bottom: 14px;
+        margin-bottom: 22px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+      ">
+        <div>
+          <div style="
+            font-size:8px;
+            font-weight:700;
+            letter-spacing:0.18em;
+            text-transform:uppercase;
+            color:#92400e;
+            margin-bottom:4px;
+          ">ChordPro Studio · Setlist</div>
+          <div style="
+            font-family:'Playfair Display',serif;
+            font-size:26px;
+            font-weight:700;
+            color:#1c1917;
+            line-height:1.1;
+          ">${escHtml(labelTitle)}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:9px;color:#78716c;">${dateStr}</div>
+          <div style="font-size:9px;color:#a8a29e;margin-top:2px;">${currentSetlistQueue.length} song${currentSetlistQueue.length !== 1 ? 's' : ''}</div>
+        </div>
+      </div>
 
-  html2pdf().set(optimizationConfig).from(container).save();
+      <!-- Legend -->
+      <div style="
+        display:flex;
+        gap:20px;
+        margin-bottom:16px;
+        font-size:8px;
+        color:#78716c;
+        letter-spacing:0.06em;
+      ">
+        <span><span style="color:#1d4ed8;font-weight:700;">■</span> Chords</span>
+        <span><span style="color:#1c1917;">■</span> Lyrics</span>
+        <span><span style="color:#92400e;background:#fef3c7;padding:1px 4px;border-radius:2px;font-size:7px;">SECTION</span> Section</span>
+      </div>
+
+      <!-- 2-column song grid -->
+      <div style="
+        column-count: 2;
+        column-gap: 16px;
+        column-fill: balance;
+      ">
+        ${songCards}
+      </div>
+
+      <!-- Footer -->
+      <div style="
+        margin-top: 24px;
+        border-top: 1px solid #d6cfc4;
+        padding-top: 10px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 8px;
+        color: #a8a29e;
+        letter-spacing: 0.06em;
+      ">
+        <span>Generated by ChordPro Studio</span>
+        <span>${escHtml(labelTitle)} · ${dateStr}</span>
+      </div>
+    </div>
+  `;
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+  const container = document.createElement('div');
+  container.innerHTML = pageHTML;
+
+  const filename = `${labelTitle.toLowerCase().replace(/\s+/g, '_')}_setlist.pdf`;
+
+  html2pdf()
+    .set({
+      margin:        [0, 0, 0, 0],
+      filename:      filename,
+      image:         { type: 'jpeg', quality: 0.98 },
+      html2canvas:   { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF:         { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    })
+    .from(container)
+    .save();
 }
+
 
 /* Modal UI Interactions */
 function openSyncSettings() {
