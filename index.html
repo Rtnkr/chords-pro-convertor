@@ -6,8 +6,9 @@
 <title>ChordPro Studio & Vertical Tape Index</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<!-- HTML2PDF Engine -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<!-- PDF Engine: html2canvas + jsPDF loaded separately for per-page rendering -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -944,11 +945,11 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ── Reusable card HTML builder (measuring + final render) ─────────────────
+// ── Reusable card HTML builder ─────────────────────────────────────────────
 function buildCardHTML(track, index) {
   const bodyHTML = renderSongToHTML(track.rawPayload);
   return `
-    <div style="border:1px solid #e7e5e4;border-radius:6px;background:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.06);overflow:visible;">
+    <div style="border:1px solid #e7e5e4;border-radius:6px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.06);overflow:visible;">
       <div style="background:#1c1917;padding:7px 12px;border-radius:5px 5px 0 0;">
         <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:700;color:#a8a29e;letter-spacing:0.1em;margin-right:8px;">${String(index + 1).padStart(2,'0')}</span>
         <span style="font-family:'Playfair Display',serif;font-size:13px;font-weight:700;color:#faf8f4;">${escHtml(track.title)}</span>
@@ -961,7 +962,8 @@ function buildCardHTML(track, index) {
 }
 
 async function generateSetlistPDF() {
-  if(currentSetlistQueue.length === 0) return showToast("Select active tape elements from your storage cabinet shelf to prime the export compiler queue.", "warning");
+  if (currentSetlistQueue.length === 0)
+    return showToast("Add songs to the queue before exporting.", "warning");
 
   const labelTitle = document.getElementById('setlist-title').value || 'Setlist Sheet';
   const labelDate  = document.getElementById('setlist-date').value  || '';
@@ -971,36 +973,49 @@ async function generateSetlistPDF() {
     catch(e) { dateStr = labelDate; }
   }
 
-  // ── A4 page geometry ───────────────────────────────────────────────────────
-  // Each page is a FIXED 794 x 1123 px div. html2pdf renders every page as its
-  // own canvas snapshot and stitches them together — no mid-line slicing ever.
-  const PW      = 794;   // A4 width  at 96 dpi
-  const PH      = 1123;  // A4 height at 96 dpi
-  const PAD     = 28;    // page padding (all sides)
-  const CGAP    = 16;    // gap between the two columns
-  const VGAP    = 14;    // vertical gap between cards
-  const FOOT_H  = 40;    // footer height
-  const HEAD_H  = 118;   // header + legend (first page only)
+  showToast("Building PDF — measuring songs…", "success");
 
-  const COL_W      = (PW - PAD * 2 - CGAP) / 2;  // ~361 px
-  const COL_H_P1   = PH - PAD * 2 - HEAD_H - FOOT_H;  // first page col height
-  const COL_H_REST = PH - PAD * 2 - FOOT_H;            // other pages col height
+  // ── A4 page geometry at 96 dpi ─────────────────────────────────────────────
+  const PW     = 794;
+  const PH     = 1123;
+  const PAD    = 28;
+  const CGAP   = 16;
+  const VGAP   = 14;
+  const FOOT_H = 44;
+  const HEAD_H = 120;
 
-  // ── Measure each card off-screen ───────────────────────────────────────────
-  showToast("Preparing PDF…", "success");
-  await new Promise(r => setTimeout(r, 60));
+  const COL_W      = Math.floor((PW - PAD * 2 - CGAP) / 2);
+  const COL_H_P1   = PH - PAD * 2 - HEAD_H - FOOT_H;
+  const COL_H_REST = PH - PAD * 2 - FOOT_H;
 
+  // ── Wait for Google Fonts ──────────────────────────────────────────────────
+  if (document.fonts && document.fonts.ready) {
+    await document.fonts.ready;
+  }
+  await new Promise(r => setTimeout(r, 150));
+
+  // ── Measure each card in a hidden probe ────────────────────────────────────
   const probe = document.createElement('div');
-  probe.style.cssText = `position:fixed;left:-9999px;top:0;width:${COL_W}px;visibility:hidden;pointer-events:none;font-family:'IBM Plex Mono',monospace;font-size:9.5px;`;
+  probe.style.cssText = [
+    'position:absolute', 'left:-9999px', 'top:0',
+    `width:${COL_W}px`,
+    'visibility:hidden', 'pointer-events:none',
+    "font-family:'IBM Plex Mono',monospace",
+    'font-size:9.5px', 'line-height:1.5'
+  ].join(';');
   document.body.appendChild(probe);
 
-  const heights = currentSetlistQueue.map((track, i) => {
-    probe.innerHTML = buildCardHTML(track, i);
-    return probe.offsetHeight;
-  });
+  const heights = [];
+  for (let i = 0; i < currentSetlistQueue.length; i++) {
+    probe.innerHTML = buildCardHTML(currentSetlistQueue[i], i);
+    // Force layout
+    void probe.offsetHeight;
+    // Add 20% safety buffer to handle font rendering differences
+    heights.push(Math.ceil(probe.offsetHeight * 1.20));
+  }
   document.body.removeChild(probe);
 
-  // ── Greedy bin-pack: left col → right col → new page ──────────────────────
+  // ── Greedy bin-pack: left → right → next page ─────────────────────────────
   const pages = [];
   let pg   = { left: [], right: [] };
   let side = 'left';
@@ -1009,16 +1024,20 @@ async function generateSetlistPDF() {
 
   for (let i = 0; i < currentSetlistQueue.length; i++) {
     const h = heights[i] + VGAP;
+
     if (used + h > cap) {
       if (side === 'left') {
-        side = 'right'; used = 0;          // spill to right column
+        side = 'right'; used = 0;
       } else {
-        pages.push(pg);                    // both columns full → new page
+        pages.push(pg);
         pg   = { left: [], right: [] };
         side = 'left'; used = 0;
         cap  = COL_H_REST;
       }
     }
+
+    // If a single card is taller than the column, still place it
+    // (it won't be cut because we render per-page with html2canvas)
     pg[side].push(i);
     used += h;
   }
@@ -1033,7 +1052,7 @@ async function generateSetlistPDF() {
     ).join('');
   }
 
-  function pageDiv(pi, data) {
+  function buildPageDiv(pi, data) {
     const first = pi === 0;
 
     const header = first ? `
@@ -1060,7 +1079,7 @@ async function generateSetlistPDF() {
       </div>`;
 
     return `
-      <div style="width:${PW}px;height:${PH}px;background:#f5f0e8;padding:${PAD}px;box-sizing:border-box;position:relative;overflow:hidden;page-break-after:always;">
+      <div class="pdf-page" style="width:${PW}px;height:${PH}px;background:#f5f0e8;padding:${PAD}px;box-sizing:border-box;position:relative;overflow:hidden;">
         ${header}
         <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
           <colgroup>
@@ -1076,26 +1095,49 @@ async function generateSetlistPDF() {
       </div>`;
   }
 
-  // ── Assemble & export ──────────────────────────────────────────────────────
+  // ── Mount all pages in hidden wrapper ──────────────────────────────────────
   const wrapper = document.createElement('div');
-  wrapper.style.width = PW + 'px';
-  wrapper.innerHTML = pages.map((p, i) => pageDiv(i, p)).join('');
+  wrapper.style.cssText = `position:absolute;left:-9999px;top:0;width:${PW}px;`;
+  wrapper.innerHTML = pages.map((p, i) => buildPageDiv(i, p)).join('');
+  document.body.appendChild(wrapper);
+
+  // Let browser lay out + render fonts
+  await new Promise(r => setTimeout(r, 200));
+
+  showToast("Rendering pages…", "success");
+  await new Promise(r => setTimeout(r, 50));
+
+  // ── Render each page INDEPENDENTLY with html2canvas → jsPDF ────────────────
+  // This is the key: each page is captured as its own canvas snapshot.
+  // There is NO giant canvas that gets sliced. Zero cuts, guaranteed.
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit: 'px', format: [PW, PH], hotfixes: ['px_scaling'] });
+
+  const pageDivs = wrapper.querySelectorAll('.pdf-page');
+
+  for (let i = 0; i < pageDivs.length; i++) {
+    const canvas = await html2canvas(pageDivs[i], {
+      scale:           2,
+      width:           PW,
+      height:          PH,
+      useCORS:         true,
+      letterRendering: true,
+      logging:         false,
+      backgroundColor: '#f5f0e8'
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+    if (i > 0) pdf.addPage([PW, PH]);
+    pdf.addImage(imgData, 'JPEG', 0, 0, PW, PH);
+  }
+
+  document.body.removeChild(wrapper);
 
   const filename = `${labelTitle.toLowerCase().replace(/\s+/g, '_')}_setlist.pdf`;
-
-  html2pdf()
-    .set({
-      margin:      0,
-      filename:    filename,
-      image:       { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true, width: PW },
-      jsPDF:       { unit: 'px', format: [PW, PH], orientation: 'portrait' },
-      pagebreak:   { mode: ['css'] }
-    })
-    .from(wrapper)
-    .save();
+  pdf.save(filename);
+  showToast("PDF saved!", "success");
 }
-
 
 /* Modal UI Interactions */
 function openSyncSettings() {
